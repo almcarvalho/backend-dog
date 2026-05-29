@@ -54,6 +54,8 @@ O parametro `hora` aceita `HH:mm` ou `HH:mm:ss`.
 
 O backend interpreta o agendamento usando o offset configurado em `SCHEDULE_TIMEZONE_OFFSET`.
 Se a variavel nao for definida, o padrao e `-03:00`.
+Isso significa que, mesmo com o Render rodando em UTC, a data e hora enviadas em `data` e `hora` serao lidas como horario local `-03:00`.
+Quando `hora` for enviada sem segundos, o backend aplica uma tolerancia de ate 60 segundos para evitar erro por atraso de rede ou diferenca de relogio no servidor.
 
 Exemplo de resposta:
 

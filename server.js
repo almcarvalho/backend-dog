@@ -5,6 +5,7 @@ const PORT = process.env.PORT || 3000;
 const ONLINE_WINDOW_MS = 30 * 1000;
 const SCHEDULE_TIMEZONE_OFFSET =
   process.env.SCHEDULE_TIMEZONE_OFFSET || "-03:00";
+const SCHEDULE_GRACE_MS = 60 * 1000;
 
 // Armazena o ultimo contato e se ha liberacao pendente por maquina.
 const machines = new Map();
@@ -85,18 +86,40 @@ function formatRemainingTime(targetTimestamp) {
 
 function parseScheduledDateTime(data, hora) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
-    return null;
+    return { scheduledAt: null, hasExplicitSeconds: false };
   }
 
-  const horaNormalizada = /^\d{2}:\d{2}$/.test(hora)
-    ? `${hora}:00`
-    : hora;
+  const hasExplicitSeconds = /^\d{2}:\d{2}:\d{2}$/.test(hora);
+  const hasOnlyHourAndMinute = /^\d{2}:\d{2}$/.test(hora);
+  const horaNormalizada = hasOnlyHourAndMinute ? `${hora}:00` : hora;
 
   if (!/^\d{2}:\d{2}:\d{2}$/.test(horaNormalizada)) {
-    return null;
+    return { scheduledAt: null, hasExplicitSeconds: false };
   }
 
-  return new Date(`${data}T${horaNormalizada}${SCHEDULE_TIMEZONE_OFFSET}`);
+  const offsetMatch = /^([+-])(\d{2}):(\d{2})$/.exec(
+    SCHEDULE_TIMEZONE_OFFSET
+  );
+
+  if (!offsetMatch) {
+    return { scheduledAt: null, hasExplicitSeconds: false };
+  }
+
+  const [, signal, offsetHoursText, offsetMinutesText] = offsetMatch;
+  const [year, month, day] = data.split("-").map(Number);
+  const [hours, minutes, seconds] = horaNormalizada.split(":").map(Number);
+  const offsetMinutes =
+    Number(offsetHoursText) * 60 + Number(offsetMinutesText);
+  const signedOffsetMinutes =
+    signal === "-" ? -offsetMinutes : offsetMinutes;
+  const utcTimestamp =
+    Date.UTC(year, month - 1, day, hours, minutes, seconds) -
+    signedOffsetMinutes * 60 * 1000;
+
+  return {
+    scheduledAt: new Date(utcTimestamp),
+    hasExplicitSeconds,
+  };
 }
 
 function hasScheduledRelease(state) {
@@ -168,7 +191,10 @@ const server = http.createServer((req, res) => {
       });
     }
 
-    const scheduledAt = parseScheduledDateTime(data, hora);
+    const { scheduledAt, hasExplicitSeconds } = parseScheduledDateTime(
+      data,
+      hora
+    );
 
     if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
       return sendJson(res, 400, {
@@ -176,20 +202,33 @@ const server = http.createServer((req, res) => {
       });
     }
 
-    if (scheduledAt.getTime() <= Date.now()) {
+    const now = Date.now();
+    let scheduledTimestamp = scheduledAt.getTime();
+
+    // Quando o cliente envia apenas HH:mm, aceitamos ate 60s de tolerancia
+    // para evitar falha por atraso de rede ou diferenca de relogio no deploy.
+    if (!hasExplicitSeconds && scheduledTimestamp <= now) {
+      const withinGraceWindow = now - scheduledTimestamp <= SCHEDULE_GRACE_MS;
+
+      if (withinGraceWindow) {
+        scheduledTimestamp = now + 1000;
+      }
+    }
+
+    if (scheduledTimestamp <= now) {
       return sendJson(res, 400, {
         error: "O agendamento deve estar no futuro.",
       });
     }
 
-    state.scheduledReleaseAt = scheduledAt.getTime();
+    state.scheduledReleaseAt = scheduledTimestamp;
     state.scheduledReleaseReady = false;
     state.releasePending = false;
 
     return sendJson(res, 200, {
       machine,
       agendado: true,
-      scheduledReleaseAt: scheduledAt.toISOString(),
+      scheduledReleaseAt: new Date(scheduledTimestamp).toISOString(),
       tempoRestante: formatRemainingTime(state.scheduledReleaseAt),
       timezoneOffset: SCHEDULE_TIMEZONE_OFFSET,
       mensagem: "Liberacao de racao agendada.",
