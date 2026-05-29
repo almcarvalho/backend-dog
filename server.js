@@ -6,6 +6,11 @@ const ONLINE_WINDOW_MS = 30 * 1000;
 const SCHEDULE_TIMEZONE_OFFSET =
   process.env.SCHEDULE_TIMEZONE_OFFSET || "-03:00";
 const SCHEDULE_GRACE_MS = 60 * 1000;
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 // Armazena o ultimo contato e se ha liberacao pendente por maquina.
 const machines = new Map();
@@ -29,6 +34,7 @@ function isOnline(lastSeenAt) {
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
+    ...CORS_HEADERS,
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify(data));
@@ -36,6 +42,7 @@ function sendJson(res, statusCode, data) {
 
 function sendText(res, statusCode, text) {
   res.writeHead(statusCode, {
+    ...CORS_HEADERS,
     "Content-Type": "text/plain; charset=utf-8",
   });
   res.end(text);
@@ -130,6 +137,12 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
   const machine = url.searchParams.get("machine");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+    return;
+  }
 
   if (!machine) {
     return sendJson(res, 400, {
