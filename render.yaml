@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: dog-feeder-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start

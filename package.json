@@ -1,0 +1,12 @@
+{
+  "name": "dog-feeder-backend",
+  "version": "1.0.0",
+  "description": "Backend simples para controle remoto de alimentacao de caes e gatos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
