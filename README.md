@@ -2,6 +2,24 @@
 
 Backend Node.js simples para hospedar no Render.
 
+## Configuracao
+
+Crie um arquivo `.env` na raiz com:
+
+```env
+API_KEY=sua-chave-api
+SCHEDULE_TIMEZONE_OFFSET=-03:00
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+## Autenticacao
+
+Todas as rotas exigem o header `x-api-key`, exceto as rotas publicas da maquina:
+
+```txt
+x-api-key: sua-chave-api
+```
+
 ## Rotas
 
 ### `GET /consulta?machine=nome-da-maquina`
@@ -9,86 +27,85 @@ Backend Node.js simples para hospedar no Render.
 Rota chamada pela maquina.
 
 - Atualiza o `lastSeenAt` da maquina.
-- Se existir racao pendente, responde `true` uma unica vez.
-- Depois volta a responder `false`.
+- Se existir uma liberacao pendente, responde com o tempo em milissegundos configurado.
+- Depois volta a responder `0`.
 
 Exemplo de resposta:
 
 ```txt
-false
+1500
 ```
 
-### `GET /liberar-racao?machine=nome-da-maquina`
+### `POST /liberar-racao`
 
-Enfileira uma liberacao de racao para a maquina informada.
+Enfileira uma liberacao imediata de racao para a maquina informada.
+
+Body:
+
+```json
+{
+  "machine": "esp32-sala",
+  "tempoMs": 1500
+}
+```
 
 Se a maquina estiver offline, a rota retorna erro e nao cria liberacao pendente.
 
-Exemplo de resposta:
-
-```json
-{
-  "machine": "esp32-sala",
-  "online": true,
-  "releasePending": true,
-  "lastSeenAt": "2026-05-28T12:00:00.000Z",
-  "mensagem": "Liberacao de racao enfileirada."
-}
-```
-
-Exemplo quando a maquina estiver offline:
-
-```json
-{
-  "machine": "esp32-sala",
-  "online": false,
-  "mensagem": "maquina offline"
-}
-```
-
-### `GET /agendar-racao?machine=nome-da-maquina&data=2026-05-29&hora=21:30`
+### `POST /agendar-racao`
 
 Agenda uma liberacao futura de racao para a maquina informada.
 
-O parametro `hora` aceita `HH:mm` ou `HH:mm:ss`.
-
-O backend interpreta o agendamento usando o offset configurado em `SCHEDULE_TIMEZONE_OFFSET`.
-Se a variavel nao for definida, o padrao e `-03:00`.
-Isso significa que, mesmo com o Render rodando em UTC, a data e hora enviadas em `data` e `hora` serao lidas como horario local `-03:00`.
-Quando `hora` for enviada sem segundos, o backend aplica uma tolerancia de ate 60 segundos para evitar erro por atraso de rede ou diferenca de relogio no servidor.
-
-Exemplo de resposta:
+Body:
 
 ```json
 {
   "machine": "esp32-sala",
-  "agendado": true,
-  "scheduledReleaseAt": "2026-05-30T00:30:00.000Z",
-  "tempoRestante": "1h 12m 4s",
-  "timezoneOffset": "-03:00",
-  "mensagem": "Liberacao de racao agendada."
+  "data": "2026-05-29",
+  "hora": "21:30",
+  "tempoMs": 1500,
+  "repeat": true
 }
 ```
+
+O parametro `hora` aceita `HH:mm` ou `HH:mm:ss`.
+O campo `repeat` e opcional. Quando vier `true`, o backend mantem a recorrencia diaria nesse mesmo horario.
+
+O backend interpreta o agendamento usando o offset configurado em `SCHEDULE_TIMEZONE_OFFSET`.
+Se a variavel nao for definida, o padrao e `-03:00`.
+Quando `hora` for enviada sem segundos, o backend aplica uma tolerancia de ate 60 segundos para evitar erro por atraso de rede ou diferenca de relogio no servidor.
+
+Agora uma maquina pode ter varios agendamentos ativos ao mesmo tempo.
+
+### `GET /agendamentos?machine=nome-da-maquina`
+
+Lista os agendamentos ativos da maquina.
+
+Essa rota e publica.
+
+### `DELETE /agendamentos?machine=nome-da-maquina&id=ID_DO_AGENDAMENTO`
+
+Remove um agendamento especifico pelo `id`.
+
+Essa rota exige o header `x-api-key`.
 
 ### `GET /status?machine=nome-da-maquina`
 
 Consulta se a maquina esta online. Uma maquina e considerada online quando a ultima chamada em `/consulta` aconteceu nos ultimos 30 segundos.
 
-Exemplo de resposta:
+## Swagger
 
-```json
-{
-  "machine": "esp32-sala",
-  "online": true,
-  "lastSeenAt": "2026-05-29T00:15:38.868Z",
-  "releasePending": false,
-  "hasScheduledRelease": true,
-  "scheduledReleaseAt": "2026-05-30T00:30:00.000Z",
-  "scheduledReleaseReady": false,
-  "tempoRestanteParaProximaLiberacao": "1h 12m 4s",
-  "timezoneOffset": "-03:00"
-}
-```
+- Documentacao interativa: `GET /docs`
+- Especificacao OpenAPI JSON: `GET /openapi.json`
+
+## Webhook do Discord
+
+Quando a maquina consumir uma liberacao em `/consulta`, o backend tenta enviar um webhook para o Discord com:
+
+- hora do disparo
+- tempo escolhido em milissegundos
+- informacao se foi criado um novo agendamento da recorrencia
+
+Quando o backend sobe, ele tambem envia um aviso de reinicio informando que os agendamentos em memoria foram perdidos e precisam ser reprogramados.
 
 ## Deploy no Render
 
@@ -96,6 +113,6 @@ Exemplo de resposta:
 - Build Command: deixar vazio
 - Start Command: `npm start`
 
-## Observação
+## Observacao
 
 Os dados ficam em memoria. Se o servico reiniciar, o estado das maquinas e filas de liberacao sera perdido.
