@@ -135,6 +135,32 @@ function getLocalDateTimeParts(timestamp) {
   };
 }
 
+function getLocalWeekdayName(timestamp) {
+  const shiftedDate = new Date(
+    timestamp + getTimezoneOffsetMinutes() * 60 * 1000
+  );
+  const weekdayNames = [
+    "domingo",
+    "segunda-feira",
+    "terca-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sabado",
+  ];
+
+  return weekdayNames[shiftedDate.getUTCDay()];
+}
+
+function formatDurationForDiscord(durationMs) {
+  if (durationMs % 1000 === 0) {
+    const totalSeconds = durationMs / 1000;
+    return `${totalSeconds} segundo${totalSeconds === 1 ? "" : "s"}`;
+  }
+
+  return `${durationMs} ms`;
+}
+
 function formatRemainingTime(targetTimestamp) {
   if (!targetTimestamp) {
     return null;
@@ -409,24 +435,19 @@ async function notifyDiscord(machine, release) {
     return;
   }
 
-  const happenedAt = new Date().toISOString();
-  const localDateTime = getLocalDateTimeParts(Date.now());
-  const nextScheduleText = release.nextScheduledAt
-    ? new Date(release.nextScheduledAt).toISOString()
-    : "nenhum";
+  const now = Date.now();
+  const localDateTime = getLocalDateTimeParts(now);
+  const localWeekdayName = getLocalWeekdayName(now);
   const sourceLabel =
     release.source === "manual" ? "manual" : "agendamento";
 
   const message = [
     `Racao dispensada para ${machine}.`,
     `Origem: ${sourceLabel}.`,
-    `Hora do disparo: ${localDateTime.data} ${localDateTime.hora} (${SCHEDULE_TIMEZONE_OFFSET}).`,
-    `Hora UTC: ${happenedAt}.`,
-    `Tempo escolhido: ${release.durationMs} ms.`,
-    `Novo agendamento no mesmo horario: ${
-      release.rescheduledNext ? "sim" : "nao"
-    }.`,
-    `Proximo agendamento da recorrencia: ${nextScheduleText}.`,
+    `Liberado em: ${localWeekdayName}`,
+    `Hora: ${localDateTime.hora.slice(0, 5)}`,
+    `Tempo: ${formatDurationForDiscord(release.durationMs)}`,
+    `Repete dia seguinte: ${release.rescheduledNext ? "Sim" : "Nao"}`,
   ].join("\n");
 
   await sendDiscordMessage(message);
