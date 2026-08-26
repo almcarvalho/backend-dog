@@ -7,7 +7,7 @@ Backend Node.js simples para hospedar no Render.
 Crie um arquivo `.env` na raiz com:
 
 ```env
-API_KEY=sua-chave-api
+API_KEY=sua-chave-api-voce-cria-ex-meuDogao123@
 SCHEDULE_TIMEZONE_OFFSET=-03:00
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 CALLMEBOT=https://api.callmebot.com/whatsapp.php?phone=5579911112222&text=This+is+a+test&apikey=11223344
