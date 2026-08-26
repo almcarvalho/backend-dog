@@ -10,6 +10,7 @@ Crie um arquivo `.env` na raiz com:
 API_KEY=sua-chave-api
 SCHEDULE_TIMEZONE_OFFSET=-03:00
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+CALLMEBOT=https://api.callmebot.com/whatsapp.php?phone=5579911112222&text=This+is+a+test&apikey=11223344
 ```
 
 ## Autenticacao
