@@ -8,6 +8,7 @@ loadEnvFile();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || "";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
+const CALLMEBOT = process.env.CALLMEBOT || "";
 const ACTIVE_MACHINE_LABEL = process.env.ACTIVE_MACHINE_LABEL || "dog1";
 const ONLINE_WINDOW_MS = 30 * 1000;
 const SCHEDULE_TIMEZONE_OFFSET =
@@ -21,6 +22,7 @@ const CORS_HEADERS = {
 };
 
 const machines = new Map();
+const CALLMEBOT_CONFIG = parseCallMeBotConfig(CALLMEBOT);
 
 function loadEnvFile() {
   const envPath = path.join(__dirname, ".env");
@@ -59,6 +61,33 @@ function createMachineState() {
     pendingReleases: [],
     schedules: [],
   };
+}
+
+function parseCallMeBotConfig(callMeBotUrl) {
+  if (!callMeBotUrl) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(callMeBotUrl);
+    const phone = parsedUrl.searchParams.get("phone") || "";
+    const apikey = parsedUrl.searchParams.get("apikey") || "";
+    const pathname = parsedUrl.pathname || "/whatsapp.php";
+
+    if (!phone || !apikey) {
+      return null;
+    }
+
+    return {
+      origin: parsedUrl.origin,
+      pathname,
+      phone,
+      apikey,
+    };
+  } catch (error) {
+    console.error("CALLMEBOT invalida:", error);
+    return null;
+  }
 }
 
 function getMachineState(machine) {
@@ -431,10 +460,6 @@ function updateScheduledReleases(state) {
 }
 
 async function notifyDiscord(machine, release) {
-  if (!DISCORD_WEBHOOK_URL) {
-    return;
-  }
-
   const now = Date.now();
   const localDateTime = getLocalDateTimeParts(now);
   const localWeekdayName = getLocalWeekdayName(now);
@@ -450,7 +475,7 @@ async function notifyDiscord(machine, release) {
     `Repete dia seguinte: ${release.rescheduledNext ? "Sim" : "Nao"}`,
   ].join("\n");
 
-  await sendDiscordMessage(message);
+  await sendReleaseNotifications(message);
 }
 
 async function sendDiscordMessage(content) {
@@ -477,6 +502,39 @@ async function sendDiscordMessage(content) {
   }
 }
 
+async function sendWhatsAppMessage(text) {
+  if (!CALLMEBOT_CONFIG) {
+    return;
+  }
+
+  try {
+    const requestUrl = new URL(
+      `${CALLMEBOT_CONFIG.origin}${CALLMEBOT_CONFIG.pathname}`
+    );
+
+    requestUrl.searchParams.set("phone", CALLMEBOT_CONFIG.phone);
+    requestUrl.searchParams.set("apikey", CALLMEBOT_CONFIG.apikey);
+    requestUrl.searchParams.set("text", text);
+
+    const response = await fetch(requestUrl, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      console.error(
+        `Falha ao enviar mensagem pelo WhatsApp: ${response.status} ${response.statusText}`
+      );
+    }
+  } catch (error) {
+    console.error("Falha ao enviar mensagem pelo WhatsApp:", error);
+  }
+}
+
+async function sendReleaseNotifications(message) {
+  await sendDiscordMessage(message);
+  await sendWhatsAppMessage(message);
+}
+
 async function notifyServerRestart() {
   const localDateTime = getLocalDateTimeParts(Date.now());
   const message = [
@@ -487,7 +545,7 @@ async function notifyServerRestart() {
     `Horario local do reinicio: ${localDateTime.data} ${localDateTime.hora} (${SCHEDULE_TIMEZONE_OFFSET}).`,
   ].join("\n");
 
-  await sendDiscordMessage(message);
+  await sendReleaseNotifications(message);
 }
 
 function getStatusResponse(machine, state) {
