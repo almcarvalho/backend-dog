@@ -260,12 +260,28 @@ function parseScheduledDateTime(data, hora) {
   };
 }
 
+function getMachineIdFromPathname(pathname) {
+  const match = /^\/consultar-maquina\/([^/]+)$/.exec(pathname);
+
+  if (!match) {
+    return "";
+  }
+
+  try {
+    return decodeURIComponent(match[1]).trim();
+  } catch (error) {
+    return "";
+  }
+}
+
 function isPublicRoute(method, pathname) {
   return (
     method === "GET" &&
     (
       pathname === "/consulta" ||
+      Boolean(getMachineIdFromPathname(pathname)) ||
       pathname === "/status" ||
+      pathname === "/devices" ||
       pathname === "/agendamentos"
     )
   );
@@ -680,6 +696,41 @@ function buildOpenApiSpec() {
           },
         },
       },
+      "/consultar-maquina/{id}": {
+        get: {
+          summary: "Consulta da maquina com retorno JSON",
+          description:
+            "Atualiza o ultimo contato da maquina e retorna o proximo tempo pendente como uma string de, no minimo, quatro digitos.",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: {
+                type: "string",
+              },
+            },
+          ],
+          responses: {
+            200: {
+              description: "Tempo pendente formatado.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      retorno: {
+                        type: "string",
+                        example: "0000",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       "/liberar-racao": {
         post: {
           summary: "Enfileira liberacao imediata",
@@ -788,6 +839,16 @@ function buildOpenApiSpec() {
           responses: {
             200: {
               description: "Status retornado com sucesso.",
+            },
+          },
+        },
+      },
+      "/devices": {
+        get: {
+          summary: "Lista todos os dispositivos e seus status",
+          responses: {
+            200: {
+              description: "Dispositivos retornados com sucesso.",
             },
           },
         },
@@ -929,6 +990,51 @@ async function handleRequest(req, res) {
   if (!isAuthorized(req, pathname)) {
     return sendJson(res, 401, {
       error: "API key invalida ou nao informada.",
+    });
+  }
+
+  const pathMachineId = getMachineIdFromPathname(pathname);
+
+  if (req.method === "GET" && pathMachineId) {
+    const state = getMachineState(pathMachineId);
+    updateScheduledReleases(state);
+    state.lastSeenAt = Date.now();
+    const release = state.pendingReleases.shift();
+    const pulsosFormatados = String(release ? release.durationMs : 0).padStart(
+      4,
+      "0"
+    );
+
+    if (release) {
+      res.on("finish", () => {
+        notifyDiscord(pathMachineId, release).catch((error) => {
+          console.error("Falha ao disparar notificacao do Discord:", error);
+        });
+      });
+    }
+
+    return sendJson(res, 200, {
+      retorno: pulsosFormatados,
+    });
+  }
+
+  if (req.method === "GET" && pathname === "/devices") {
+    const devices = Array.from(machines, ([machine, state]) => {
+      const online = isOnline(state.lastSeenAt);
+
+      return {
+        machine,
+        online,
+        status: online ? "online" : "offline",
+        lastSeenAt: state.lastSeenAt
+          ? new Date(state.lastSeenAt).toISOString()
+          : null,
+      };
+    });
+
+    return sendJson(res, 200, {
+      total: devices.length,
+      devices,
     });
   }
 

@@ -37,6 +37,19 @@ Exemplo de resposta:
 1500
 ```
 
+### `GET /consultar-maquina/:id`
+
+Versao da rota de consulta que recebe o identificador da maquina pela URL e responde em JSON.
+O retorno sempre possui pelo menos quatro digitos e a chamada atualiza o status online da maquina.
+
+Exemplo: `GET /consultar-maquina/esp32-sala`
+
+```json
+{
+  "retorno": "0000"
+}
+```
+
 ### `POST /liberar-racao`
 
 Enfileira uma liberacao imediata de racao para a maquina informada.
@@ -92,6 +105,27 @@ Essa rota exige o header `x-api-key`.
 ### `GET /status?machine=nome-da-maquina`
 
 Consulta se a maquina esta online. Uma maquina e considerada online quando a ultima chamada em `/consulta` aconteceu nos ultimos 30 segundos.
+
+### `GET /devices`
+
+Lista todos os dispositivos conhecidos pelo servidor e informa se cada um esta `online` ou `offline`.
+A rota e publica e nao exige o parametro `machine`.
+
+Exemplo de resposta:
+
+```json
+{
+  "total": 1,
+  "devices": [
+    {
+      "machine": "esp32-sala",
+      "online": true,
+      "status": "online",
+      "lastSeenAt": "2026-09-30T12:00:00.000Z"
+    }
+  ]
+}
+```
 
 ## Swagger
 
