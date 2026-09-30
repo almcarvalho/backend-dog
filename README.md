@@ -134,6 +134,7 @@ Exige o header `x-api-key`.
 
 Retorna `200` quando removida, `400` se o nome estiver ausente ou vazio e `404` se a maquina nao existir.
 Se a maquina consultar o servidor novamente, ela sera cadastrada de novo, sem os agendamentos anteriores.
+Consultas do painel a `/status` e `/agendamentos` nao cadastram novamente uma maquina removida.
 
 Exemplo de resposta:
 

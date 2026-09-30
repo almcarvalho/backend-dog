@@ -4,7 +4,8 @@
   "description": "Backend simples para controle remoto de alimentacao de caes e gatos",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

@@ -1245,7 +1245,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === "GET" && pathname === "/agendamentos") {
-    const state = getMachineState(machine);
+    const state = machines.get(machine) || createMachineState();
     updateScheduledReleases(state);
 
     return sendJson(res, 200, {
@@ -1264,10 +1264,10 @@ async function handleRequest(req, res) {
       });
     }
 
-    const state = getMachineState(machine);
-    const scheduleIndex = state.schedules.findIndex(
+    const state = machines.get(machine);
+    const scheduleIndex = state ? state.schedules.findIndex(
       (schedule) => schedule.id === scheduleId
-    );
+    ) : -1;
 
     if (scheduleIndex === -1) {
       return sendJson(res, 404, {
@@ -1286,7 +1286,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === "GET" && pathname === "/status") {
-    const state = getMachineState(machine);
+    const state = machines.get(machine) || createMachineState();
     updateScheduledReleases(state);
 
     return sendJson(res, 200, getStatusResponse(machine, state));
@@ -1302,15 +1302,19 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
-  console.log(`Swagger: http://localhost:${PORT}/docs`);
-  console.log(`OpenAPI: http://localhost:${PORT}/openapi.json`);
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(`Swagger: http://localhost:${PORT}/docs`);
+    console.log(`OpenAPI: http://localhost:${PORT}/openapi.json`);
 
-  notifyServerRestart().catch((error) => {
-    console.error(
-      "Falha ao disparar notificacao de reinicio do servidor:",
-      error
-    );
+    notifyServerRestart().catch((error) => {
+      console.error(
+        "Falha ao disparar notificacao de reinicio do servidor:",
+        error
+      );
+    });
   });
-});
+}
+
+module.exports = server;
