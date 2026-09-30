@@ -127,6 +127,24 @@ Exemplo de resposta:
 }
 ```
 
+### `DELETE /devices?machine=nome-da-maquina`
+
+Remove a maquina pelo nome, incluindo seus agendamentos e liberacoes pendentes.
+Exige o header `x-api-key`.
+
+Retorna `200` quando removida, `400` se o nome estiver ausente ou vazio e `404` se a maquina nao existir.
+Se a maquina consultar o servidor novamente, ela sera cadastrada de novo, sem os agendamentos anteriores.
+
+Exemplo de resposta:
+
+```json
+{
+  "machine": "esp32-sala",
+  "removido": true,
+  "mensagem": "Maquina removida com sucesso."
+}
+```
+
 ## Swagger
 
 - Documentacao interativa: `GET /docs`

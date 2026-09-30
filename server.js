@@ -844,6 +844,27 @@ function buildOpenApiSpec() {
         },
       },
       "/devices": {
+        delete: {
+          summary: "Remove uma maquina pelo nome",
+          description:
+            "Remove a maquina, seus agendamentos e liberacoes pendentes. Uma nova consulta da maquina volta a registra-la.",
+          security: [{ ApiKeyAuth: [] }],
+          parameters: [
+            {
+              name: "machine",
+              in: "query",
+              required: true,
+              schema: { type: "string", minLength: 1 },
+              example: "esp32-sala",
+            },
+          ],
+          responses: {
+            200: { description: "Maquina removida com sucesso." },
+            400: { description: "Nome da maquina nao informado." },
+            401: { description: "API key invalida ou nao informada." },
+            404: { description: "Maquina nao encontrada." },
+          },
+        },
         get: {
           summary: "Lista todos os dispositivos e seus status",
           responses: {
@@ -1050,7 +1071,10 @@ async function handleRequest(req, res) {
     }
   }
 
-  const machine = getMachineFromRequest(req, url, body);
+  const requestedMachine = getMachineFromRequest(req, url, body);
+  const machine = req.method === "DELETE"
+    ? (requestedMachine || "").trim()
+    : requestedMachine;
 
   if (
     pathname !== "/docs" &&
@@ -1059,9 +1083,23 @@ async function handleRequest(req, res) {
   ) {
     return sendJson(res, 400, {
       error:
-        req.method === "GET"
+        req.method === "GET" || req.method === "DELETE"
           ? 'Informe a query string "machine". Exemplo: ?machine=esp32-sala'
           : 'Informe "machine" no corpo JSON.',
+    });
+  }
+
+  if (req.method === "DELETE" && pathname === "/devices") {
+    if (!machines.delete(machine)) {
+      return sendJson(res, 404, {
+        error: "Maquina nao encontrada.",
+      });
+    }
+
+    return sendJson(res, 200, {
+      machine,
+      removido: true,
+      mensagem: "Maquina removida com sucesso.",
     });
   }
 
