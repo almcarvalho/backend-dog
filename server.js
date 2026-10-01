@@ -9,8 +9,12 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || "";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
 const CALLMEBOT = process.env.CALLMEBOT || "";
+const WHATSAPP_IP = (process.env.WHATSAPP_IP || "").trim();
+const WHATSAPP_TO_NUMBER = (process.env.WHATSAPP_TO_NUMBER || "").trim();
+const WHATSAPP_API_KEY = (process.env.WHATSAPP_API_KEY || "").trim();
 const ACTIVE_MACHINE_LABEL = process.env.ACTIVE_MACHINE_LABEL || "dog1";
 const ONLINE_WINDOW_MS = 30 * 1000;
+const WHATSAPP_HEALTH_URL = `${WHATSAPP_IP.replace(/\/+$/, "")}/health`;
 const SCHEDULE_TIMEZONE_OFFSET =
   process.env.SCHEDULE_TIMEZONE_OFFSET || "-03:00";
 const SCHEDULE_GRACE_MS = 60 * 1000;
@@ -100,6 +104,29 @@ function getMachineState(machine) {
 
 function isOnline(lastSeenAt) {
   return Boolean(lastSeenAt) && Date.now() - lastSeenAt <= ONLINE_WINDOW_MS;
+}
+
+async function getWhatsAppDevice() {
+  let online = false;
+
+  try {
+    const response = await fetch(WHATSAPP_HEALTH_URL, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (response.ok) {
+      const health = await response.json();
+      online = health?.status === "ok" && health?.whatsapp?.ready === true;
+    }
+  } catch {
+    // Falhas de conexao, timeout e respostas invalidas indicam offline.
+  }
+
+  return {
+    machine: "bot-whatsapp",
+    online,
+    status: online ? "online" : "offline",
+    lastSeenAt: online ? new Date().toISOString() : null,
+  };
 }
 
 function sendJson(res, statusCode, data) {
@@ -518,7 +545,36 @@ async function sendDiscordMessage(content) {
   }
 }
 
+async function notifyWhatsAppFailure(text) {
+  await sendDiscordMessage(`Falha ao enviar mensagem pelo WhatsApp.\n\n${text}`);
+}
+
 async function sendWhatsAppMessage(text) {
+  if (WHATSAPP_IP && WHATSAPP_TO_NUMBER) {
+    try {
+      const response = await fetch(`${WHATSAPP_IP.replace(/\/+$/, "")}/enviar`, {
+        method: "POST",
+        headers: {
+          "x-api-key": WHATSAPP_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ numero: WHATSAPP_TO_NUMBER, texto: text }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        console.error(
+          `Falha ao enviar mensagem pelo WhatsApp: ${response.status} ${response.statusText}`
+        );
+        await notifyWhatsAppFailure(text);
+      }
+    } catch (error) {
+      console.error("Falha ao enviar mensagem pelo WhatsApp:", error);
+      await notifyWhatsAppFailure(text);
+    }
+    return;
+  }
+
   if (!CALLMEBOT_CONFIG) {
     return;
   }
@@ -534,15 +590,18 @@ async function sendWhatsAppMessage(text) {
 
     const response = await fetch(requestUrl, {
       method: "GET",
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
       console.error(
         `Falha ao enviar mensagem pelo WhatsApp: ${response.status} ${response.statusText}`
       );
+      await notifyWhatsAppFailure(text);
     }
   } catch (error) {
     console.error("Falha ao enviar mensagem pelo WhatsApp:", error);
+    await notifyWhatsAppFailure(text);
   }
 }
 
@@ -1052,6 +1111,8 @@ async function handleRequest(req, res) {
           : null,
       };
     });
+
+    devices.push(await getWhatsAppDevice());
 
     return sendJson(res, 200, {
       total: devices.length,

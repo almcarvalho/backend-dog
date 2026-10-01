@@ -1,20 +1,34 @@
 const assert = require("node:assert/strict");
-const { before, after, test } = require("node:test");
+const { before, after, test, mock } = require("node:test");
 
 // Isolate credentials and disable external notifications during HTTP tests.
 process.env.API_KEY = "local-test-key";
 process.env.DISCORD_WEBHOOK_URL = "";
 process.env.CALLMEBOT = "";
+process.env.WHATSAPP_IP = "http://whatsapp.test/";
+process.env.WHATSAPP_TO_NUMBER = "";
 process.env.SCHEDULE_TIMEZONE_OFFSET = "-03:00";
 const server = require("./server");
 let baseUrl;
+const originalFetch = global.fetch;
+let healthResponse = async () => new Response(JSON.stringify({
+  status: "ok", whatsapp: { ready: true },
+}));
 
 before(async () => {
+  mock.method(global, "fetch", (url, options) => {
+    if (url === "http://whatsapp.test/health") {
+      assert.ok(options.signal instanceof AbortSignal);
+      return healthResponse();
+    }
+    return originalFetch(url, options);
+  });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
 after(async () => {
+  mock.restoreAll();
   await new Promise((resolve, reject) => {
     server.close((error) => error ? reject(error) : resolve());
     server.closeAllConnections();
@@ -38,6 +52,40 @@ async function assertAbsent(machine) {
   assert.equal(result.status, 200);
   assert.equal(result.body.devices.some((device) => device.machine === machine), false);
 }
+
+test("devices appends bot-whatsapp and handles health failures", async () => {
+  const defaultHealthResponse = healthResponse;
+  const cases = [
+    [() => new Response(JSON.stringify({ status: "ok", whatsapp: { ready: true } })), true],
+    [() => new Response(JSON.stringify({ status: "ok", whatsapp: { ready: false } })), false],
+    [() => new Response(JSON.stringify({ status: "error", whatsapp: { ready: true } })), false],
+    [() => new Response(JSON.stringify({ status: "ok", whatsapp: { ready: "true" } })), false],
+    [() => new Response('{}'), false],
+    [() => new Response('null'), false],
+    [() => new Response('invalid json'), false],
+    [() => new Response('{}', { status: 503 }), false],
+    [() => { throw new TypeError("Connection failed"); }, false],
+    [() => { throw new DOMException("Timed out", "TimeoutError"); }, false],
+  ];
+  try {
+    await request("/consultar-maquina/health-test");
+    for (const [respond, online] of cases) {
+      healthResponse = respond;
+      const result = await request("/devices", "GET", undefined, false);
+      assert.equal(result.status, 200);
+      assert.equal(result.body.total, result.body.devices.length);
+      assert.equal(result.body.devices[0].machine, "health-test");
+      const bot = result.body.devices.at(-1);
+      assert.equal(bot.machine, "bot-whatsapp");
+      assert.equal(bot.online, online);
+      assert.equal(bot.status, online ? "online" : "offline");
+      assert.equal(bot.lastSeenAt !== null, online);
+    }
+  } finally {
+    healthResponse = defaultHealthResponse;
+    await request("/devices?machine=health-test", "DELETE");
+  }
+});
 
 test("deleted device stays absent after dashboard refresh and failed deletes", async () => {
   const machine = "delete-device-test";
