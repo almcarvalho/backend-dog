@@ -129,12 +129,12 @@ async function getWhatsAppDevice() {
   };
 }
 
-function sendJson(res, statusCode, data) {
+function sendJson(res, statusCode, data, spacing = 2) {
   res.writeHead(statusCode, {
     ...CORS_HEADERS,
     "Content-Type": "application/json; charset=utf-8",
   });
-  res.end(JSON.stringify(data, null, 2));
+  res.end(JSON.stringify(data, null, spacing));
 }
 
 function sendText(res, statusCode, text) {
@@ -1091,7 +1091,7 @@ async function handleRequest(req, res) {
 
     return sendJson(res, 200, {
       retorno: release ? "0001" : "0000",
-    });
+    }, 0);
   }
 
   if (req.method === "GET" && pathname === "/devices") {
