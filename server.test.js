@@ -115,7 +115,7 @@ test("deleted device stays absent after dashboard refresh and failed deletes", a
   assert.equal((await request("/devices", "DELETE")).status, 400);
 
   // A real device heartbeat still registers it again, with its old queues cleared.
-  assert.equal((await request(`/consultar-maquina/${machine}`)).body.retorno, "0001");
+  assert.equal((await request(`/consultar-maquina/${machine}`)).body.retorno, "0000");
   const devices = (await request("/devices")).body.devices;
   assert.equal(devices.find((device) => device.machine === machine).online, true);
   assert.equal((await request(`/status?machine=${machine}`)).body.scheduledReleaseCount, 0);

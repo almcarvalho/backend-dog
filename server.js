@@ -759,7 +759,7 @@ function buildOpenApiSpec() {
         get: {
           summary: "Consulta da maquina com retorno JSON",
           description:
-            "Atualiza o ultimo contato da maquina e retorna sempre { \"retorno\": \"0001\" }, independentemente do tempo pendente.",
+            "Atualiza o ultimo contato da maquina e retorna 0001 quando houver liberacao pendente, independentemente do tempo configurado, ou 0000 quando nao houver.",
           parameters: [
             {
               name: "id",
@@ -772,7 +772,7 @@ function buildOpenApiSpec() {
           ],
           responses: {
             200: {
-              description: "Retorno fixo da consulta.",
+              description: "Indica se havia liberacao pendente.",
               content: {
                 "application/json": {
                   schema: {
@@ -1090,7 +1090,7 @@ async function handleRequest(req, res) {
     }
 
     return sendJson(res, 200, {
-      retorno: "0001",
+      retorno: release ? "0001" : "0000",
     });
   }
 
