@@ -49,7 +49,7 @@ for (const scenario of [
       });
       assert.equal(release.status, 200);
       await release.json();
-      assert.equal((await (await heartbeat()).json()).retorno, "1500");
+      assert.equal((await (await heartbeat()).json()).retorno, "0001");
       assert.equal(sent.length, 1);
       const { url, options } = sent[0];
       if (scenario.service) {

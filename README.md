@@ -40,13 +40,13 @@ Exemplo de resposta:
 ### `GET /consultar-maquina/:id`
 
 Versao da rota de consulta que recebe o identificador da maquina pela URL e responde em JSON.
-O retorno sempre possui pelo menos quatro digitos e a chamada atualiza o status online da maquina.
+O retorno e sempre `{ "retorno": "0001" }`, independentemente do tempo configurado ou de haver liberacao pendente. A chamada atualiza o status online da maquina.
 
 Exemplo: `GET /consultar-maquina/esp32-sala`
 
 ```json
 {
-  "retorno": "0000"
+  "retorno": "0001"
 }
 ```
 

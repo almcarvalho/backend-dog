@@ -759,7 +759,7 @@ function buildOpenApiSpec() {
         get: {
           summary: "Consulta da maquina com retorno JSON",
           description:
-            "Atualiza o ultimo contato da maquina e retorna o proximo tempo pendente como uma string de, no minimo, quatro digitos.",
+            "Atualiza o ultimo contato da maquina e retorna sempre { \"retorno\": \"0001\" }, independentemente do tempo pendente.",
           parameters: [
             {
               name: "id",
@@ -772,7 +772,7 @@ function buildOpenApiSpec() {
           ],
           responses: {
             200: {
-              description: "Tempo pendente formatado.",
+              description: "Retorno fixo da consulta.",
               content: {
                 "application/json": {
                   schema: {
@@ -780,7 +780,7 @@ function buildOpenApiSpec() {
                     properties: {
                       retorno: {
                         type: "string",
-                        example: "0000",
+                        example: "0001",
                       },
                     },
                   },
@@ -1080,10 +1080,6 @@ async function handleRequest(req, res) {
     updateScheduledReleases(state);
     state.lastSeenAt = Date.now();
     const release = state.pendingReleases.shift();
-    const pulsosFormatados = String(release ? release.durationMs : 0).padStart(
-      4,
-      "0"
-    );
 
     if (release) {
       res.on("finish", () => {
@@ -1094,7 +1090,7 @@ async function handleRequest(req, res) {
     }
 
     return sendJson(res, 200, {
-      retorno: pulsosFormatados,
+      retorno: "0001",
     });
   }
 
