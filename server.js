@@ -25,7 +25,13 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
 };
 
-const machines = new Map();
+const configuredMachines = require("./machines.json");
+// O bot-whatsapp tem seu estado consultado diretamente pelo health check.
+const machines = new Map(
+  configuredMachines
+    .filter((machine) => machine !== "bot-whatsapp")
+    .map((machine) => [machine, createMachineState()])
+);
 const CALLMEBOT_CONFIG = parseCallMeBotConfig(CALLMEBOT);
 
 function loadEnvFile() {
@@ -1095,7 +1101,9 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === "GET" && pathname === "/devices") {
-    const devices = Array.from(machines, ([machine, state]) => {
+    const devices = Array.from(machines)
+      .filter(([machine]) => machine !== "bot-whatsapp")
+      .map(([machine, state]) => {
       const online = isOnline(state.lastSeenAt);
 
       return {

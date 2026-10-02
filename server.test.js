@@ -53,6 +53,21 @@ async function assertAbsent(machine) {
   assert.equal(result.body.devices.some((device) => device.machine === machine), false);
 }
 
+test("configured machines are offline on startup and become online after a heartbeat", async () => {
+  const devices = (await request("/devices")).body.devices;
+  for (const machine of require("./machines.json").filter((name) => name !== "bot-whatsapp")) {
+    const device = devices.find((entry) => entry.machine === machine);
+    assert.ok(device);
+    assert.equal(device.online, false);
+    assert.equal(device.status, "offline");
+    assert.equal(device.lastSeenAt, null);
+  }
+  await request("/consultar-maquina/cafeteira");
+  const updated = (await request("/devices")).body.devices;
+  assert.equal(updated.find((device) => device.machine === "cafeteira").online, true);
+  assert.equal(updated.filter((device) => device.machine === "bot-whatsapp").length, 1);
+});
+
 test("devices appends bot-whatsapp and handles health failures", async () => {
   const defaultHealthResponse = healthResponse;
   const cases = [
@@ -74,7 +89,7 @@ test("devices appends bot-whatsapp and handles health failures", async () => {
       const result = await request("/devices", "GET", undefined, false);
       assert.equal(result.status, 200);
       assert.equal(result.body.total, result.body.devices.length);
-      assert.equal(result.body.devices[0].machine, "health-test");
+      assert.ok(result.body.devices.some((device) => device.machine === "health-test"));
       const bot = result.body.devices.at(-1);
       assert.equal(bot.machine, "bot-whatsapp");
       assert.equal(bot.online, online);
